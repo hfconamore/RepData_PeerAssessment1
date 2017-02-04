@@ -137,7 +137,7 @@ $(document).ready(function () {
 </div>
 <div id="loading-data" class="section level2">
 <h2>Loading Data</h2>
-<pre class="r"><code>setwd(&quot;/Users/Feng/Documents/AfterGraduationStudy/DataScienceSpecialization/05_ReproducibleResearch/ReproducibleResearch_HW_Quiz/W2_HW_Project1&quot;)
+<pre class="r"><code>setwd(&quot;/Users/Feng/Desktop/RepData_PeerAssessment1&quot;)
 rawdata &lt;- read.csv(&quot;activity.csv&quot;, header = T)
 rawdata$date &lt;- ymd(rawdata$date)
 dim(rawdata)</code></pre>
@@ -355,6 +355,9 @@ print(results)</code></pre>
 ## 1   Weekday  230.3782           104       835
 ## 2   Weekend  166.6392           112       915</code></pre>
 <p>As we can see from the table above, in weekdays the 104th interval (representing time at 835) has the peak (230 steps) of the steps taken throughout the day while in weekends the 112th interval (representing time at 915) has the maximum number of steps taken (167 steps).</p>
+<pre class="r"><code>#' At the end of the Rmd document, the command below is run in Console to produce PA1_template.md and
+#' PA1_template.html files.
+# render(&quot;PA1_template.Rmd&quot;, c(&quot;html_document&quot;, &quot;md_document&quot;))</code></pre>
 <p><br><br> <br><br></p>
 </div>
 
