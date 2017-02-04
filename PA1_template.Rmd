@@ -1,25 +1,215 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research Project 1 — Activity Monitoring Data Analysis"
+author: "Feng Hong"
+date: "2/1/2017"
+output: html_document
 ---
 
+```{r setting global options, include = FALSE}
+knitr::opts_chunk$set(echo = T, error = F, warning = F, eval = T, cache = F)
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(ggplot2)
+library(lattice)
+```
 
-## Loading and preprocessing the data
+<br><br>
 
+## Introduction
+In this project, I will analyze data from a personal activity monitoring device. Questions addressed include:
 
+* What is mean total number of steps taken per day?
+* What is the average daily activity pattern?
+* How are missing data imputed?
+* Are there differences in activity patterns between weekdays and weekends?
 
-## What is mean total number of steps taken per day?
+<br><br>
 
+## Loading Data
 
+```{r data processing}
+setwd("/Users/Feng/Documents/AfterGraduationStudy/DataScienceSpecialization/05_ReproducibleResearch/ReproducibleResearch_HW_Quiz/W2_HW_Project1")
+rawdata <- read.csv("activity.csv", header = T)
+rawdata$date <- ymd(rawdata$date)
+dim(rawdata)
+head(rawdata)
+```
 
-## What is the average daily activity pattern?
+<br><br>
 
+## About the Total Number of Steps Taken Each Day
+I use dplyr package to calculate the total number of steps taken each day. 
 
+```{r total steps by date with dplyr()}
+sumbyday <- rawdata %>% group_by(date) %>% summarize(sum.steps = sum(steps))
+dim(sumbyday)
+sumbyday[c(1:3, (nrow(sumbyday) - 2):nrow(sumbyday)), ]
+```
 
-## Imputing missing values
+The histogram is plotted based on sumbyday data set generated in the previous step. 
 
+```{r sum of steps by day Histograms}
+g <- ggplot(data = sumbyday, aes(x = sum.steps))
+g <- g + geom_histogram(color = "wheat4", fill = "hotpink", bins = 25) + 
+     scale_x_continuous(name = "Total Number of Steps Taken Each Day") + 
+     scale_y_continuous(name = "Count", breaks = seq(0, 10, 2)) + 
+     ggtitle(label = "Histogram of the Total Number of Steps Taken Each Day")
+g_sumbyday <- g + theme(plot.margin = unit(c(1,1,1,1), "cm"), 
+                        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"), 
+                        axis.text = element_text(size = 12), axis.title = element_text(size = 14, face = "bold"))
+g_sumbyday
+```
 
+Mean and median of total steps taken each day are extracted from the summary of the sumbyday data set.
 
-## Are there differences in activity patterns between weekdays and weekends?
+```{r mean and median of total steps taken each day}
+summary(sumbyday[2])
+meanofsum <- gsub("[^0-9]", "", unclass(summary(sumbyday[2]))[4])
+medianofsum <- gsub("[^0-9]", "", unclass(summary(sumbyday[2]))[3])
+```
+
+The mean and median of the total number of steps taken per day are `r meanofsum` steps and `r medianofsum` steps respectively.
+
+<br><br>
+
+## Average Daily Activity Pattern
+### Data Reshaping
+To facilitate further analysis, I reshape the long format data frame to a wide format one. In the wide format data frame, there're 289 variables and 61 observations. Variables are date and the 288 intervals. Observations are the daily data from the 61 days.
+
+```{r reshape data}
+widedata <- reshape(rawdata, timevar = "interval", idvar = "date", direction = "wide")
+names(widedata) <- gsub("steps.","intvl.", names(widedata))
+rownames(widedata) <- c()
+dim(widedata)
+tail(widedata[ , c(1:5, 285:289)])
+```
+
+### Time Series Plot
+A new data set is generated to record the average steps taken in each interval.
+```{r data set of average steps by interval}
+avgperintvl <- data.frame(index = 1:288, avg.steps = colMeans(widedata[-1], na.rm = T))
+#' The index variable is added to the data frame because there's a jump of the original interval index before 
+#' each i'th o'clock sharp (e.g., from 1255 to 1300 rather than to 1260), which would lead to discontinuity 
+#' in the figures to plot.
+dim(avgperintvl)
+head(avgperintvl)
+```
+
+A time series plot is presented to show the average number of steps taken during each 5-minute interval throughout a day.
+
+```{r time series plot of average steps by interval}
+g <- ggplot(data = avgperintvl, aes(x = index, y = avg.steps))
+g <- g + geom_line(color = "royalblue4", size = 1) + 
+     geom_point(aes(x = which.max(avgperintvl$avg.steps), y = max(avg.steps)),
+                shape = 1, size = 5, color = "orange")
+g <- g + scale_x_continuous(name = "5-minute Interval Index", breaks = seq(0, 300, 50)) + 
+     scale_y_continuous(name = "Average Steps Count") + 
+     ggtitle(label = "Average Number of Steps Taken in Each Interval", subtitle = "(Averaged across All Days)")
+g_meanbyintvl <- g + theme(plot.margin = unit(c(1,1,1,1), "cm"), 
+                           plot.title = element_text(hjust = 0.5, size = 14, face = "bold"), 
+                           plot.subtitle = element_text(hjust = 0.5, size = 12), 
+                           axis.text = element_text(size = 10), 
+                           axis.title = element_text(size = 12, face = "bold"))
+g_meanbyintvl
+```
+
+```{r find the max of mean}
+maxsteps <- round(max(avgperintvl$avg.steps))
+maxindex <- which.max(avgperintvl$avg.steps)
+maxintvl <- str_extract(rownames(avgperintvl)[maxindex], "[0-9]+")
+```
+
+In all the 5-minute intervals, interval representing time at `r maxintvl` (index No.`r maxindex`) contains the maximum number of steps (`r maxsteps` steps) on average across all the days in the data set.
+
+<br><br>
+
+## Missing Data Imputation
+### Imputing NA Value
+In accordance with the project instructions, data frame rawdata is used to calculate the total number of missing values in the original data set. 
+
+```{r find the NA entries}
+na_record <- tapply(rawdata$steps, rawdata$date, function(x) sum(is.na(x)))
+head(na_record)
+na_totalnum <- sum(na_record)
+na_date <- names(na_record)[na_record > 0]
+```
+
+There are `r na_totalnum` NA entries in the original data. The days that contain the NA entries are: `r na_date`. The data in the remaining 53 days are complete.   
+I use the 53-day mean steps taken in each interval to impute the missing data in the 8 NA-value-filled days.
+
+```{r impute NA values}
+raw_imputed <- rawdata
+na_index <- which(raw_imputed$date %in% as.Date(na_date))
+raw_imputed$steps[na_index] <- rep(avgperintvl$avg.steps, 8)
+head(raw_imputed)
+```
+
+With the imputed data, I recalculate the total number of steps taken each day. Note that the numbers are rounded to integers.
+
+```{r total steps by date (without NA) with dplyr()}
+sumbyday_imp <- raw_imputed %>% group_by(date) %>% summarize(sum.steps = round(sum(steps)))
+sumbyday_imp[c(1:3, (nrow(sumbyday_imp) - 2):nrow(sumbyday_imp)), ]
+```
+
+### Replotting the Histogram
+The histogram of the total number of steps taken each day is replotted based on the data from sumbyday_imp.
+
+```{r Histogram with the new data}
+g <- ggplot(data = sumbyday_imp, aes(x = sum.steps))
+g <- g + geom_histogram(color = "slateblue3", fill = "peachpuff", bins = 25) + 
+     scale_x_continuous(name = "Total Number of Steps Taken Each Day") + 
+     scale_y_continuous(name = "Count", breaks = seq(0, 18, 2)) + 
+     ggtitle(label = "Histogram of the Total Number of Steps Taken Each Day",  
+             subtitle = "(NA Data Imputed with Mean Value)")
+g_sumbyday_imp <- g + theme(plot.margin = unit(c(1,1,1,1), "cm"), 
+                            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+                            plot.subtitle = element_text(hjust = 0.5, size = 12),
+                            axis.text = element_text(size = 12),
+                            axis.title = element_text(size = 14, face = "bold"))
+g_sumbyday_imp
+```
+
+```{r recalculate the mean and median of total steps taken each day}
+meanofsum_imp <- mean(sumbyday_imp$sum.steps)
+medianofsum_imp <- median(sumbyday_imp$sum.steps)
+sdsum <- sd(sumbyday$sum.steps, na.rm = T)
+sdsum_imp <- sd(sumbyday_imp$sum.steps)
+```
+
+In the imputed data, the mean and median of the total number of steps taken per day are `r format(round(meanofsum_imp), scientific = F)` steps and `r format(medianofsum_imp, scientific = F)` steps respectively.  
+The data imputation significantly changes the distribution of the total number of steps taken per day, though the changes in its mean and median are negligible. The bin representing the count of observations around the mean value (`r format(round(meanofsum_imp), scientific = F)` steps) is almost twice as tall as that in the first histogram. The standard deviation of the total number of steps taken per day decreases from `r sdsum` to `r sdsum_imp`.
+
+<br><br>
+
+## Differences in Activity Patterns between Weekdays and Weekends
+```{r label weekdays and weekends}
+raw_imputed$dayofweek <- factor(weekdays(raw_imputed$date) %in% c("Saturday","Sunday"), 
+                                labels = c("Weekday","Weekend"))
+by_dofw <- raw_imputed %>% group_by(dayofweek, interval) %>% summarize(mean.steps = mean(steps))
+by_dofw$intvl.index <- rep(1:288, 2)
+by_dofw[c(1:3, (nrow(by_dofw) - 2):nrow(by_dofw)), ]
+```
+
+Now I use lattace package to draw the panel plot.
+```{r plots by day of the week}
+xyplot(data = by_dofw, mean.steps ~ intvl.index | dayofweek, type = "l", layout = c(1, 2),
+       main = "Average Number of Steps Taken in Each Interval\n(Averaged across All Weekends and All Weekdays Respectively)", 
+       xlab = list(label = "5-minute Interval Index", fontsize = 14),
+       ylab = list(label = "Average Steps Count", fontsize = 14))
+```
+
+Judging from the panel plot, the average number of steps taken in each interval follows similar trend in weekends and weekdays. But the values of the mean steps in each interval do differ appreciably between weekends and weekdays.
+
+```{r differences between weekends and weekdays}
+results <- by_dofw %>% group_by(dayofweek) %>%
+           summarize(max.steps = max(mean.steps), 
+                     max.int.index = intvl.index[mean.steps == max.steps], 
+                     max.intvl = interval[mean.steps == max.steps])
+print(results)
+```
+As we can see from the table above, in weekdays the `r results[1, 3]`th interval (representing time at `r results[1, 4]`) has the peak (`r round(results[1, 2])` steps) of the steps taken throughout the day while in weekends the `r results[2, 3]`th interval (representing time at `r results[2, 4]`) has the maximum number of steps taken (`r round(results[2, 2])` steps).
+
+<br><br>
+<br><br>
+
